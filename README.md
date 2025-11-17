@@ -13,10 +13,11 @@
 ## 🎯 Main Features
 
 ### 1. Split Text into Layers
-- Splits a text layer into two separate layers
+- Splits a text layer into two separate layers (or multiple layers if "Split into Layers by Lines" is enabled)
 - Supports multiple layer selection
 - Automatically copies source layer properties (position, scale, rotation, opacity)
-- Supports splitting by symbol or automatically at the middle
+- Supports splitting by symbol, by lines, or automatically at the middle
+- **"Split into Layers by Lines" mode**: When enabled, divides text by lines - each line becomes a separate layer
 
 ### 2. Split Text into Lines
 - Splits a long line into two lines in the same layer
@@ -50,8 +51,9 @@
 - **Split into Lines** - splits text into two lines in the same layer
 
 #### "Options" Panel
-- **Use Split Symbol** - use a split symbol (specified in the field below)
+- **Split into Layers by Lines** - when enabled, "Split into Layers" divides text by lines (each line becomes a separate layer)
 - **Split at Layer Middle** - automatically split at the middle of layer duration
+- **Use Split Symbol** - use a split symbol (specified in the field below)
 - **Split Symbol** - field for entering the split symbol (default: `$`)
 
 #### "Rename and Number Layers" Panel
@@ -96,9 +98,10 @@ The script uses intelligent rules to prevent incorrect text splitting:
 - `\n` (LF - Unix/Linux)
 
 ### Split Priorities
-1. **Line breaks** (only for "Split into Layers")
-2. **Split symbol** (if "Use Split Symbol" checkbox is enabled)
-3. **Automatic search** - nearest space to the middle of the text with respect to rules
+1. **"Split into Layers by Lines" mode** (if enabled): Simple line-by-line splitting - each line becomes a separate layer
+2. **Line breaks** (only for "Split into Layers" when "Split into Layers by Lines" is disabled)
+3. **Split symbol** (if "Use Split Symbol" checkbox is enabled)
+4. **Automatic search** - nearest space to the middle of the text with respect to rules
 
 ### Formatting Rules Application Order (for automatic search)
 1. **Compound expressions** (multi-word prepositions, geographical names, companies) - priority #1
@@ -164,6 +167,10 @@ A detailed map of all functions and data structures is available in [SCRIPT_MAP.
 - **Added "Up" checkbox** for inverted numbering and sorting order
   - When enabled: earliest inPoint gets highest number and is placed at bottom
   - Fixed numbering to follow chronological order of inPoints
+- **Added "Split into Layers by Lines" checkbox** for simple line-by-line splitting
+  - When enabled: "Split into Layers" divides text by lines - each line becomes a separate layer
+  - Ignores formatting rules and simply splits at line breaks
+- All alert messages translated to English
 - Removed debug messages
 - Updated documentation
 

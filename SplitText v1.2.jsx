@@ -31,19 +31,26 @@ var optionsPanel = win.add("panel", undefined, "Options");
 optionsPanel.alignment = "fill";
 optionsPanel.orientation = "column"; // Вертикальное расположение чекбоксов
 
-// Чекбокс для использования символа разделения
-var useSplitSymbolCheckbox = optionsPanel.add("checkbox", undefined, "Use Split Symbol");
-useSplitSymbolCheckbox.alignment = "left";
-useSplitSymbolCheckbox.value = false;
-useSplitSymbolCheckbox.helpTip = "Place the specified symbol (or any symbol you prefer) in the text where you want the split to occur.";
+// Чекбокс для разделения по строкам
+var splitByLinesCheckbox = optionsPanel.add("checkbox", undefined, "Split into Layers by Lines");
+splitByLinesCheckbox.alignment = "left";
+splitByLinesCheckbox.value = false;
+splitByLinesCheckbox.helpTip = "When enabled, 'Split into Layers' divides text by lines. If text has multiple lines, each line becomes a separate layer.";
 
 var splitByMidCheckbox = optionsPanel.add("checkbox", undefined, "Split at Layer Middle");
 splitByMidCheckbox.alignment = "left";
 splitByMidCheckbox.value = false;
 splitByMidCheckbox.helpTip = "Automatically split the text at the middle point of the layer's duration. No need to manually position the timeline cursor.";
 
+// Чекбокс для использования символа разделения
+var useSplitSymbolCheckbox = optionsPanel.add("checkbox", undefined, "Use Split Symbol");
+useSplitSymbolCheckbox.alignment = "left";
+useSplitSymbolCheckbox.value = false;
+useSplitSymbolCheckbox.helpTip = "Place the specified symbol (or any symbol you prefer) in the text where you want the split to occur.";
+
 // Поле для ввода символа разделения (внутри панели Options)
 var symbolLabel = optionsPanel.add("statictext", undefined, "Split Symbol:");
+symbolLabel.alignment = "fill";
 var splitSymbolInput = optionsPanel.add("edittext", undefined, "$");
 splitSymbolInput.characters = 5;
 splitSymbolInput.alignment = "fill";
@@ -252,18 +259,18 @@ var specialChars = {",":1, ".":1, "!":1, "?":1, ":":1, ";":1};
 // ============================================================================
 function validateSelection() {
     if (!app.project || !app.project.activeItem) {
-        alert("Откройте композицию.");
+        alert("Open a composition.");
         return null;
     }
     
     var comp = app.project.activeItem;
     if (!(comp instanceof CompItem)) {
-        alert("Активный элемент не является композицией.");
+        alert("Active item is not a composition.");
         return null;
     }
     
     if (comp.selectedLayers.length === 0) {
-        alert("Пожалуйста, выберите хотя бы один текстовый слой.");
+        alert("Please select at least one text layer.");
         return null;
     }
     
@@ -280,7 +287,7 @@ function validateSelection() {
     }
     
     if (textLayers.length === 0) {
-        alert("Выбранные слои не являются текстовыми или пусты.");
+        alert("Selected layers are not text layers or are empty.");
         return null;
     }
     
@@ -318,12 +325,12 @@ function calculateSplitPosition(text, checkLineBreak) {
     if (useSplitSymbolCheckbox.value) {
         var splitSymbol = splitSymbolInput.text;
         if (!splitSymbol || splitSymbol.length === 0) {
-            alert("Введите символ разделения.");
+            alert("Enter split symbol.");
             return null;
         }
         var position = text.indexOf(splitSymbol);
         if (position === -1) {
-            alert("Символ разделения не найден в тексте.");
+            alert("Split symbol not found in text.");
             return null;
         }
         return { position: position, length: splitSymbol.length };
@@ -333,7 +340,7 @@ function calculateSplitPosition(text, checkLineBreak) {
     var middleIndex = Math.floor(text.length / 2);
     var splitIndex = findSplitPosition(text, middleIndex);
     if (splitIndex === -1) {
-        alert("Не удалось найти подходящий пробел для разделения.");
+        alert("Could not find suitable space for splitting.");
         return null;
     }
     return { position: splitIndex, length: 1 };
@@ -363,23 +370,33 @@ function handleSplit(createNewLayers) {
             var text = layerData.text;
             
             if (createNewLayers) {
-                // Для Split Text проверяем переносы строк
-                var splitInfo = calculateSplitPosition(text, true);
-                if (splitInfo) {
-                    // Для множественного выбора всегда используем середину слоя
-                    if (validated.layers.length > 1) {
-                        var middleTime = layer.inPoint + (layer.outPoint - layer.inPoint) * 0.5;
-                        validated.comp.time = middleTime;
-                        // Пересчитываем splitInfo с учетом новой позиции времени
-                        // Но для текста используем середину текста
-                        var middleTextIndex = Math.floor(text.length / 2);
-                        var textSplitIndex = findSplitPosition(text, middleTextIndex);
-                        if (textSplitIndex !== -1) {
-                            splitInfo = { position: textSplitIndex, length: 1 };
-                        }
+                // Проверяем, включен ли режим разделения по строкам
+                if (splitByLinesCheckbox.value) {
+                    // Режим разделения по строкам
+                    var lines = splitTextIntoLines(text);
+                    // Разделяем на слои по строкам (проверка на количество строк внутри функции)
+                    if (createLayersFromLines(validated.comp, layer, lines)) {
+                        success = true;
                     }
-                    createSplitLayers(validated.comp, layer, text, splitInfo);
-                    success = true;
+                } else {
+                    // Обычный режим: Для Split Text проверяем переносы строк
+                    var splitInfo = calculateSplitPosition(text, true);
+                    if (splitInfo) {
+                        // Для множественного выбора всегда используем середину слоя
+                        if (validated.layers.length > 1) {
+                            var middleTime = layer.inPoint + (layer.outPoint - layer.inPoint) * 0.5;
+                            validated.comp.time = middleTime;
+                            // Пересчитываем splitInfo с учетом новой позиции времени
+                            // Но для текста используем середину текста
+                            var middleTextIndex = Math.floor(text.length / 2);
+                            var textSplitIndex = findSplitPosition(text, middleTextIndex);
+                            if (textSplitIndex !== -1) {
+                                splitInfo = { position: textSplitIndex, length: 1 };
+                            }
+                        }
+                        createSplitLayers(validated.comp, layer, text, splitInfo);
+                        success = true;
+                    }
                 }
             } else {
                 // Для Split in Layer вычисляем splitInfo только если нет переносов строк
@@ -396,7 +413,7 @@ function handleSplit(createNewLayers) {
             }
         }
     } catch (error) {
-        alert("Ошибка: " + error.toString());
+        alert("Error: " + error.toString());
     } finally {
         app.endUndoGroup();
     }
@@ -408,8 +425,53 @@ function handleSplit(createNewLayers) {
     if (success) {
         updateStatus(createNewLayers ? "✓ Split into Layers" : "✓ Split into Lines");
     } else if (!createNewLayers) {
-        alert("Не удалось разделить текст. Проверьте настройки разделения.");
+        alert("Could not split text. Check split settings.");
     }
+}
+
+// ============================================================================
+// СОЗДАНИЕ СЛОЕВ ИЗ СТРОК
+// ============================================================================
+function createLayersFromLines(comp, layer, lines) {
+    if (lines.length < 2) {
+        alert("Not enough lines for splitting.");
+        return false;
+    }
+    
+    // Подсчитываем количество непустых строк
+    var nonEmptyLines = [];
+    for (var i = 0; i < lines.length; i++) {
+        var lineText = lines[i].trim();
+        if (lineText.length > 0) {
+            nonEmptyLines.push(lineText);
+        }
+    }
+    
+    if (nonEmptyLines.length < 2) {
+        alert("Text contains only one non-empty line. Splitting by lines is not possible.");
+        return false;
+    }
+    
+    var layerDuration = layer.outPoint - layer.inPoint;
+    var timePerLine = layerDuration / nonEmptyLines.length;
+    var currentTime = layer.inPoint;
+    
+    // Создаем слои для каждой непустой строки
+    for (var i = 0; i < nonEmptyLines.length; i++) {
+        var newLayer = comp.layers.addText(nonEmptyLines[i]);
+        newLayer.startTime = layer.startTime;
+        newLayer.inPoint = currentTime;
+        newLayer.outPoint = currentTime + timePerLine;
+        
+        // Копируем свойства исходного слоя
+        copyLayerProperties(layer, newLayer);
+        
+        currentTime += timePerLine;
+    }
+    
+    // Удаляем исходный слой
+    layer.remove();
+    return true;
 }
 
 // ============================================================================
@@ -421,7 +483,7 @@ function createSplitLayers(comp, layer, text, splitInfo) {
     
     // Проверка, что после разделения есть текст в обеих частях
     if (textBeforeSplit.length === 0 || textAfterSplit.length === 0) {
-        alert("Результат разделения пуст. Проверьте позицию разделения.");
+        alert("Split result is empty. Check split position.");
         return;
     }
     
@@ -458,7 +520,7 @@ function createSplitLayers(comp, layer, text, splitInfo) {
 function updateLayerText(layer, text, splitInfo) {
     // Если splitInfo null и нет переносов строк - выходим
     if (!splitInfo && !findLineBreak(text)) {
-        alert("Не удалось найти позицию для разделения текста.");
+        alert("Could not find position for text splitting.");
         return;
     }
     
@@ -995,7 +1057,7 @@ function setCursorToMid(comp, layer) {
     
     // Проверка на корректность временных точек
     if (layer.outPoint <= layer.inPoint) {
-        alert("Некорректная длительность слоя.");
+        alert("Invalid layer duration.");
         return null;
     }
     
@@ -1009,18 +1071,18 @@ function setCursorToMid(comp, layer) {
 // ============================================================================
 function validateSelectionForRename() {
     if (!app.project || !app.project.activeItem) {
-        alert("Откройте композицию.");
+        alert("Open a composition.");
         return null;
     }
     
     var comp = app.project.activeItem;
     if (!(comp instanceof CompItem)) {
-        alert("Активный элемент не является композицией.");
+        alert("Active item is not a composition.");
         return null;
     }
     
     if (comp.selectedLayers.length === 0) {
-        alert("Пожалуйста, выберите хотя бы один слой.");
+        alert("Please select at least one layer.");
         return null;
     }
     
@@ -1062,23 +1124,23 @@ function renameAndNumberLayers() {
     if (!validated) return;
     
     if (validated.layers.length === 0) {
-        alert("Нет слоев для переименования.");
+        alert("No layers to rename.");
         return;
     }
     
     var nameMask = nameMaskInput.text.trim();
     if (!nameMask || nameMask.length === 0) {
-        alert("Введите маску имени.");
+        alert("Enter name mask.");
         return;
     }
     
     if (nameMask.length > 50) {
-        alert("Маска имени слишком длинная. Максимум 50 символов.");
+        alert("Name mask is too long. Maximum 50 characters.");
         return;
     }
     
     if (validated.layers.length > 100) {
-        var result = confirm("Выбрано " + validated.layers.length + " слоев. Это может занять некоторое время. Продолжить?");
+        var result = confirm("Selected " + validated.layers.length + " layers. This may take some time. Continue?");
         if (!result) return;
     }
     
@@ -1240,7 +1302,7 @@ function renameAndNumberLayers() {
         }
         
     } catch (error) {
-        alert("Ошибка при переименовании: " + error.toString());
+        alert("Error renaming: " + error.toString());
     } finally {
         app.endUndoGroup();
     }
