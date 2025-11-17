@@ -1,0 +1,23 @@
+# Игнорировать папку .cursor
+.cursor/
+
+# Игнорировать резервные копии и старые версии
+*.BAK*
+*.bak
+*.backup
+*~
+
+# Игнорировать временные файлы
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Игнорировать другие версии скрипта (оставляем только v1.2)
+SplitText v1.1.jsx
+SplitText v1.0.jsx
+
+# Игнорировать дополнительные документы анализа (оставляем только README.md и SCRIPT_MAP.md)
+Documentation/ANALYSIS_*.md
+Documentation/CODE_AUDIT.md
+
