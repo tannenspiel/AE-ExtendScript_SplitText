@@ -13,9 +13,10 @@
 .DS_Store
 Thumbs.db
 
-# Игнорировать другие версии скрипта (оставляем только v1.2)
-SplitText v1.1.jsx
-SplitText v1.0.jsx
+# Игнорировать другие версии скрипта в корне (оставляем только v1.2)
+# Старые версии хранятся в папке releases/
+/SplitText v1.1.jsx
+/SplitText v1.0.jsx
 
 # Игнорировать дополнительные документы анализа (оставляем только README.md и SCRIPT_MAP.md)
 Documentation/ANALYSIS_*.md
