@@ -28,6 +28,9 @@
 - Sorts layers by start time (inPoint)
 - Supports name masks with `{num}` placeholder
 - 4-digit numbering (0001, 0002, 0003...)
+- **"Up" checkbox**: Inverts numbering and sorting order
+  - When disabled: earliest inPoint → number 0001 (at top)
+  - When enabled: earliest inPoint → highest number (at bottom)
 
 ## 🚀 Usage
 
@@ -54,6 +57,9 @@
 #### "Rename and Number Layers" Panel
 - **Name Mask** - mask for layer name (you can use `{num}` for the number)
 - **Rename & Number Layers** - button for renaming and numbering
+- **Up** - checkbox to invert numbering and sorting order
+  - **Disabled (default)**: Earliest inPoint gets number 0001 and is placed at top
+  - **Enabled**: Earliest inPoint gets highest number and is placed at bottom
 
 ## 📋 Formatting Rules
 
@@ -109,7 +115,10 @@ The script uses intelligent rules to prevent incorrect text splitting:
 ### Layer Renaming
 - If the mask contains `{num}` - it is replaced with a 4-digit number
 - If `{num}` is not present - the number is added at the end
-- Examples:
+- **Numbering order depends on "Up" checkbox**:
+  - **"Up" disabled**: Layers are numbered from earliest to latest inPoint (0001, 0002, 0003...)
+  - **"Up" enabled**: Layers are numbered from latest to earliest inPoint (highest number for earliest inPoint)
+- Examples (with "Up" disabled):
   - Mask: `"Text {num}"` → `"Text 0001"`, `"Text 0002"`
   - Mask: `"Scene"` → `"Scene 0001"`, `"Scene 0002"`
 
@@ -152,6 +161,9 @@ A detailed map of all functions and data structures is available in [SCRIPT_MAP.
 - Simplified compound expression checking logic
 - Improved `findCompoundSafePosition` function for more accurate position search
 - Fixed `lineSplitInfo.position` check in `updateLayerText`
+- **Added "Up" checkbox** for inverted numbering and sorting order
+  - When enabled: earliest inPoint gets highest number and is placed at bottom
+  - Fixed numbering to follow chronological order of inPoints
 - Removed debug messages
 - Updated documentation
 

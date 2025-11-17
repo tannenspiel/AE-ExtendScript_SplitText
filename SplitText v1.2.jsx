@@ -68,6 +68,11 @@ btnRename.preferredSize = [buttonWidth, buttonHeight];
 btnRename.alignment = "fill";
 btnRename.helpTip = "Rename and number all selected layers (text and non-text). Layers are sorted by inPoint (earlier = lower index).";
 
+// Чекбокс "Up" для инвертированной нумерации
+var upCheckbox = renamePanel.add("checkbox", undefined, "Up");
+upCheckbox.alignment = "left";
+upCheckbox.helpTip = "When enabled: earliest inPoint gets highest number and is placed at bottom. When disabled: earliest inPoint gets number 0001 and is placed at top.";
+
 // СТАТУС-БАР
 var statusBar = win.add("statictext", undefined, "Ready");
 statusBar.alignment = "fill";
@@ -1093,23 +1098,57 @@ function renameAndNumberLayers() {
             });
         }
         
-        // Сортируем по inPoint: чем раньше inPoint, тем выше индекс (ниже в списке)
-        // Слои с меньшим inPoint должны иметь больший индекс (быть ниже)
-        for (var i = 0; i < layersWithTime.length - 1; i++) {
-            for (var j = i + 1; j < layersWithTime.length; j++) {
-                if (layersWithTime[i].inPoint < layersWithTime[j].inPoint) {
-                    // Меняем местами: меньший inPoint идет дальше в массиве (получит больший индекс)
-                    var temp = layersWithTime[i];
-                    layersWithTime[i] = layersWithTime[j];
-                    layersWithTime[j] = temp;
+        // Сортируем по inPoint
+        var isUpMode = upCheckbox.value;
+        
+        if (isUpMode) {
+            // Режим "Up": чем раньше inPoint, тем позже в массиве (получит больший номер)
+            // Слои с меньшим inPoint должны быть последними в массиве (получить номер [количество слоев], [количество-1], ...)
+            for (var i = 0; i < layersWithTime.length - 1; i++) {
+                for (var j = i + 1; j < layersWithTime.length; j++) {
+                    if (layersWithTime[i].inPoint < layersWithTime[j].inPoint) {
+                        // Меняем местами: меньший inPoint идет дальше в массиве (получит больший номер)
+                        var temp = layersWithTime[i];
+                        layersWithTime[i] = layersWithTime[j];
+                        layersWithTime[j] = temp;
+                    }
+                }
+            }
+        } else {
+            // Обычный режим: чем раньше inPoint, тем раньше в массиве (получит меньший номер)
+            // Слои с меньшим inPoint должны быть первыми в массиве (получить номер 0001, 0002, ...)
+            for (var i = 0; i < layersWithTime.length - 1; i++) {
+                for (var j = i + 1; j < layersWithTime.length; j++) {
+                    if (layersWithTime[i].inPoint > layersWithTime[j].inPoint) {
+                        // Меняем местами: меньший inPoint идет раньше в массиве (получит меньший номер)
+                        var temp = layersWithTime[i];
+                        layersWithTime[i] = layersWithTime[j];
+                        layersWithTime[j] = temp;
+                    }
                 }
             }
         }
         
         // Переименовываем и перенумеровываем слои
+        var isUpMode = upCheckbox.value;
+        var totalLayers = layersWithTime.length;
+        
         for (var i = 0; i < layersWithTime.length; i++) {
             var layer = layersWithTime[i].layer;
-            var number = (i + 1).toString();
+            var number;
+            
+            if (isUpMode) {
+                // Режим "Up": нумеруем от последнего к первому
+                // Индекс 0 (самый поздний inPoint) → номер [totalLayers]
+                // Индекс 1 → номер [totalLayers - 1]
+                // Индекс i → номер [totalLayers - i]
+                number = (totalLayers - i).toString();
+            } else {
+                // Обычный режим: нумеруем от первого к последнему
+                // Индекс 0 (самый ранний inPoint) → номер 0001
+                // Индекс 1 → номер 0002
+                number = (i + 1).toString();
+            }
             
             // Форматируем номер с ведущими нулями (4 цифры)
             while (number.length < 4) {
@@ -1128,36 +1167,72 @@ function renameAndNumberLayers() {
         }
         
         // Перемещаем слои в правильном порядке
-        // Слои отсортированы: первый в массиве (поздний inPoint) должен быть выше (меньший индекс)
-        // Последний в массиве (ранний inPoint) должен быть ниже (больший индекс)
-        // Используем итеративный подход для надежного перемещения
+        var isUpMode = upCheckbox.value;
         
-        var maxIterations = layersWithTime.length * 2; // Максимальное количество итераций
-        var iteration = 0;
-        var allCorrect = false;
-        
-        while (!allCorrect && iteration < maxIterations) {
-            allCorrect = true;
-            iteration++;
+        if (isUpMode) {
+            // Режим "Up": первый в массиве (поздний inPoint) должен быть выше (меньший индекс)
+            // Последний в массиве (ранний inPoint) должен быть ниже (больший индекс)
+            var maxIterations = layersWithTime.length * 2;
+            var iteration = 0;
+            var allCorrect = false;
             
-            // Проверяем порядок и перемещаем слои при необходимости
-            for (var i = 0; i < layersWithTime.length; i++) {
-                var layer = layersWithTime[i].layer;
-                var previousLayer = (i > 0) ? layersWithTime[i - 1].layer : null;
+            while (!allCorrect && iteration < maxIterations) {
+                allCorrect = true;
+                iteration++;
                 
-                if (previousLayer) {
-                    // Текущий слой должен быть после предыдущего (больший индекс)
-                    if (layer.index <= previousLayer.index) {
-                        layer.moveAfter(previousLayer);
-                        allCorrect = false;
-                    }
-                } else {
-                    // Первый слой - проверяем, что он выше всех остальных выбранных
-                    for (var j = 1; j < layersWithTime.length; j++) {
-                        if (layer.index > layersWithTime[j].layer.index) {
-                            layer.moveBefore(validated.comp.layer(layersWithTime[j].layer.index));
+                for (var i = 0; i < layersWithTime.length; i++) {
+                    var layer = layersWithTime[i].layer;
+                    var previousLayer = (i > 0) ? layersWithTime[i - 1].layer : null;
+                    
+                    if (previousLayer) {
+                        // Текущий слой должен быть после предыдущего (больший индекс)
+                        // Текущий слой имеет более ранний inPoint, чем предыдущий
+                        if (layer.index <= previousLayer.index) {
+                            layer.moveAfter(previousLayer);
                             allCorrect = false;
-                            break;
+                        }
+                    } else {
+                        // Первый слой (самый поздний inPoint) - проверяем, что он выше всех остальных выбранных
+                        for (var j = 1; j < layersWithTime.length; j++) {
+                            if (layer.index > layersWithTime[j].layer.index) {
+                                layer.moveBefore(validated.comp.layer(layersWithTime[j].layer.index));
+                                allCorrect = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Обычный режим: первый в массиве (ранний inPoint) должен быть выше (меньший индекс)
+            // Последний в массиве (поздний inPoint) должен быть ниже (больший индекс)
+            var maxIterations = layersWithTime.length * 2;
+            var iteration = 0;
+            var allCorrect = false;
+            
+            while (!allCorrect && iteration < maxIterations) {
+                allCorrect = true;
+                iteration++;
+                
+                for (var i = 0; i < layersWithTime.length; i++) {
+                    var layer = layersWithTime[i].layer;
+                    var previousLayer = (i > 0) ? layersWithTime[i - 1].layer : null;
+                    
+                    if (previousLayer) {
+                        // Текущий слой должен быть после предыдущего (больший индекс)
+                        // Текущий слой имеет более поздний inPoint, чем предыдущий
+                        if (layer.index <= previousLayer.index) {
+                            layer.moveAfter(previousLayer);
+                            allCorrect = false;
+                        }
+                    } else {
+                        // Первый слой (самый ранний inPoint) - проверяем, что он выше всех остальных выбранных
+                        for (var j = 1; j < layersWithTime.length; j++) {
+                            if (layer.index > layersWithTime[j].layer.index) {
+                                layer.moveBefore(validated.comp.layer(layersWithTime[j].layer.index));
+                                allCorrect = false;
+                                break;
+                            }
                         }
                     }
                 }
