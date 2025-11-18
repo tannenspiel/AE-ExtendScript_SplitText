@@ -18,8 +18,10 @@ Thumbs.db
 /SplitText v1.1.jsx
 /SplitText v1.0.jsx
 
-# Игнорировать дополнительные документы анализа (оставляем только README.md и SCRIPT_MAP.md)
+# Игнорировать дополнительные документы анализа (оставляем только README_RU.md, README_EN.md и SCRIPT_MAP.md)
 Documentation/ANALYSIS_*.md
 Documentation/CODE_AUDIT.md
 Documentation/TEST_SENTENCES.md
+Documentation/COMPOUND_EXPRESSIONS_ANALYSIS.md
+Documentation/CONFLICT_ANALYSIS.md
 
