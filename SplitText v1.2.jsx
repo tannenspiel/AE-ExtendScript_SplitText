@@ -96,6 +96,30 @@ footerLabel.alignment = "center";
 footerLabel.graphics.font = ScriptUI.newFont(footerLabel.graphics.font.name, ScriptUI.FontStyle.REGULAR, 9);
 
 // ============================================================
+// НАСТРОЙКИ ЛОГИРОВАНИЯ
+// ============================================================
+// Установите в true для включения логирования
+var LOG_ENABLED = true; // Общий флаг логирования
+var LOG_FORMATTING_RULES = true; // Логирование applyAdvancedFormattingRules
+var LOG_COMPOUND_POSITION = true; // Логирование findCompoundSafePosition
+var LOG_AVOID_END_WORDS = true; // Логирование проверки avoidEndWords
+var LOG_NEVER_SPLIT = true; // Логирование проверки neverSplitWords
+var LOG_SPECIAL_TERMS = true; // Логирование проверки special terms
+var LOG_BASIC_RULES = true; // Логирование базовых правил
+
+// Вспомогательная функция для логирования
+function log(message, category) {
+    if (!LOG_ENABLED) return;
+    if (category === "formatting" && !LOG_FORMATTING_RULES) return;
+    if (category === "compound" && !LOG_COMPOUND_POSITION) return;
+    if (category === "avoidEnd" && !LOG_AVOID_END_WORDS) return;
+    if (category === "neverSplit" && !LOG_NEVER_SPLIT) return;
+    if (category === "special" && !LOG_SPECIAL_TERMS) return;
+    if (category === "basic" && !LOG_BASIC_RULES) return;
+    $.writeln(message);
+}
+
+// ============================================================
 // ОПТИМИЗИРОВАННЫЕ ДАННЫЕ (O(1) поиск)
 // ============================================================
 
@@ -163,7 +187,7 @@ var compoundExpressions = {
     "instead of": true, "out of": true, "up to": true, "as to": true,
     "as for": true, "as of": true, "as per": true, "in terms of": true,
     "with regard to": true, "in regard to": true, "in relation to": true,
-    "in accordance with": true, "in compliance with": true, "in addition to": true,
+    "in accordance": true, "in accordance with": true, "in compliance with": true, "in addition to": true,
     "prior to": true, "subsequent to": true, "thanks to": true, "contrary to": true,
     
     // ==================== ГЕОГРАФИЧЕСКИЕ НАЗВАНИЯ ====================
@@ -694,61 +718,163 @@ function applyAdvancedFormattingRules(text, splitIndex) {
     var beforeSplit = text.substring(0, splitIndex).trim();
     var afterSplit = text.substring(splitIndex + 1).trim();
     
+    // ЛОГИРОВАНИЕ: начальная позиция
+    log("=== applyAdvancedFormattingRules ===", "formatting");
+    log("Original text: " + text, "formatting");
+    log("Initial splitIndex: " + splitIndex, "formatting");
+    log("Initial beforeSplit: '" + beforeSplit + "'", "formatting");
+    log("Initial afterSplit: '" + afterSplit + "'", "formatting");
+    
     // 1. ПРИОРИТЕТ #1: проверка на составные выражения (многословные предлоги, географические названия, компании)
+    // Сначала проверяем составные выражения, которые пересекают границу splitIndex
     var isCompound = isCompoundExpression(beforeSplit, afterSplit);
+    
+    // ДОПОЛНИТЕЛЬНО: проверяем составные выражения в afterText, которые могут быть дальше
+    // Это нужно для случаев типа "we work in accordance with" - если splitIndex между "work" и "in"
+    if (!isCompound && afterSplit.length > 0) {
+        var afterWords = afterSplit.split(' ');
+        // Проверяем трехсловные выражения в afterText
+        if (afterWords.length >= 3) {
+            for (var i = 0; i <= afterWords.length - 3; i++) {
+                var phrase = afterWords[i] + ' ' + afterWords[i + 1] + ' ' + afterWords[i + 2];
+                if (compoundExpressions[phrase.toLowerCase()]) {
+                    log("Found compound expression '" + phrase + "' later in afterText, marking as compound", "formatting");
+                    isCompound = true;
+                    break;
+                }
+            }
+        }
+        // Проверяем двухсловные выражения в afterText
+        if (!isCompound && afterWords.length >= 2) {
+            for (var i = 0; i <= afterWords.length - 2; i++) {
+                var phrase = afterWords[i] + ' ' + afterWords[i + 1];
+                if (compoundExpressions[phrase.toLowerCase()]) {
+                    log("Found compound expression '" + phrase + "' later in afterText, marking as compound", "formatting");
+                    isCompound = true;
+                    break;
+                }
+            }
+        }
+    }
+    
+    var compoundWasFound = false;
     if (isCompound) {
+        log("Found compound expression, searching for safe position...", "formatting");
         var newIndex = findCompoundSafePosition(text, splitIndex);
         if (newIndex !== splitIndex) {
+            log("Compound expression found! Moving splitIndex from " + splitIndex + " to " + newIndex, "formatting");
             splitIndex = newIndex;
             beforeSplit = text.substring(0, splitIndex).trim();
             afterSplit = text.substring(splitIndex + 1).trim();
+            log("Updated beforeSplit: '" + beforeSplit + "'", "formatting");
+            log("Updated afterSplit: '" + afterSplit + "'", "formatting");
+            compoundWasFound = true; // Помечаем, что составное выражение было найдено и обработано
+        } else {
+            log("Compound expression found but safe position not found", "formatting");
         }
+    } else {
+        log("No compound expression found around splitIndex or in afterText", "formatting");
     }
     
     // 2. ПРИОРИТЕТ #2: проверка на слова из avoidEndWords (предлоги, артикли, союзы, местоимения)
     var beforeWords = beforeSplit.split(" ");
     if (beforeWords.length > 0) {
         var lastWord = beforeWords[beforeWords.length - 1].toLowerCase();
-        if (avoidEndWords[lastWord]) {
+        
+        // ВАЖНО: Пропускаем проверку, если lastWord является частью обработанного составного выражения
+        // Это предотвращает отмену правильного позиционирования для составных выражений
+        var isPartOfProcessedCompound = false;
+        if (compoundWasFound && beforeWords.length >= 2) {
+            var twoWordPart = beforeWords[beforeWords.length - 2] + ' ' + lastWord;
+            if (compoundExpressions[twoWordPart.toLowerCase()]) {
+                isPartOfProcessedCompound = true;
+                log("Last word '" + lastWord + "' is part of processed compound expression '" + twoWordPart + "', skipping avoidEndWords check", "avoidEnd");
+            }
+        }
+        if (!isPartOfProcessedCompound && compoundWasFound && beforeWords.length >= 3) {
+            var threeWordPart = beforeWords[beforeWords.length - 3] + ' ' + 
+                               beforeWords[beforeWords.length - 2] + ' ' + lastWord;
+            if (compoundExpressions[threeWordPart.toLowerCase()]) {
+                isPartOfProcessedCompound = true;
+                log("Last word '" + lastWord + "' is part of processed compound expression '" + threeWordPart + "', skipping avoidEndWords check", "avoidEnd");
+            }
+        }
+        
+        if (!isPartOfProcessedCompound && avoidEndWords[lastWord]) {
+            log("Found avoidEndWord: '" + lastWord + "', moving split position...", "avoidEnd");
             // Если последнее слово перед разрывом из avoidEndWords, перенести разрыв
             var newIndex = beforeSplit.lastIndexOf(" ");
             if (newIndex !== -1 && newIndex > 0) {
+                log("Moving splitIndex from " + splitIndex + " to " + newIndex, "avoidEnd");
                 splitIndex = newIndex;
                 beforeSplit = text.substring(0, splitIndex).trim();
                 afterSplit = text.substring(splitIndex + 1).trim();
+                log("Updated beforeSplit: '" + beforeSplit + "'", "avoidEnd");
+                log("Updated afterSplit: '" + afterSplit + "'", "avoidEnd");
+            } else {
+                log("Cannot move splitIndex: no space found before avoidEndWord", "avoidEnd");
+            }
+        } else {
+            if (!isPartOfProcessedCompound) {
+                log("Last word '" + lastWord + "' is not in avoidEndWords", "avoidEnd");
             }
         }
     }
     
     // 3. Проверка на слова, которые никогда не разделяются
-    if (shouldNeverSplit(beforeSplit, afterSplit)) {
+    // ВАЖНО: Если составное выражение уже было найдено и обработано, пропускаем эту проверку
+    // чтобы не отменять правильное позиционирование для составных выражений
+    if (!compoundWasFound && shouldNeverSplit(beforeSplit, afterSplit)) {
+        log("Found neverSplit words, searching alternative position...", "neverSplit");
         var newIndex = findAlternativePosition(text, splitIndex);
         if (newIndex !== splitIndex) {
+            log("Moving splitIndex from " + splitIndex + " to " + newIndex + " (neverSplit)", "neverSplit");
             splitIndex = newIndex;
             beforeSplit = text.substring(0, splitIndex).trim();
             afterSplit = text.substring(splitIndex + 1).trim();
+        }
+    } else {
+        if (compoundWasFound) {
+            log("Skipping neverSplit check because compound expression was already processed", "neverSplit");
+        } else {
+            log("No neverSplit words found", "neverSplit");
         }
     }
     
     // 4. Проверка на специальные термины (города, бренды, имена)
     if (isSpecialTerm(beforeSplit, afterSplit)) {
+        log("Found special term, searching alternative position...", "special");
         var newIndex = findAlternativePosition(text, splitIndex);
         if (newIndex !== splitIndex) {
+            log("Moving splitIndex from " + splitIndex + " to " + newIndex + " (special term)", "special");
             splitIndex = newIndex;
             beforeSplit = text.substring(0, splitIndex).trim();
             afterSplit = text.substring(splitIndex + 1).trim();
         }
+    } else {
+        log("No special terms found", "special");
     }
     
     // 5. Оригинальные правила (открывающие символы, специальные символы и т.д.)
     // Применяем только базовые правила, которые не конфликтуют с составными выражениями
     splitIndex = applyBasicFormattingRules(text, splitIndex, beforeSplit, afterSplit);
     
+    // ЛОГИРОВАНИЕ: финальная позиция
+    log("Final splitIndex: " + splitIndex, "formatting");
+    log("Final beforeSplit: '" + text.substring(0, splitIndex).trim() + "'", "formatting");
+    log("Final afterSplit: '" + text.substring(splitIndex + 1).trim() + "'", "formatting");
+    log("=== End applyAdvancedFormattingRules ===", "formatting");
+    
     return splitIndex;
 }
 
 // Базовые правила форматирования (без проверки avoidEndWords, так как она уже в applyAdvancedFormattingRules)
 function applyBasicFormattingRules(text, splitIndex, beforeSplit, afterSplit) {
+    log("--- applyBasicFormattingRules ---", "basic");
+    log("Input splitIndex: " + splitIndex, "basic");
+    log("Input beforeSplit: '" + beforeSplit + "'", "basic");
+    log("Input afterSplit: '" + afterSplit + "'", "basic");
+    
     // Обновляем значения, если они не переданы
     if (!beforeSplit || !afterSplit) {
         beforeSplit = text.substring(0, splitIndex).trim();
@@ -761,11 +887,14 @@ function applyBasicFormattingRules(text, splitIndex, beforeSplit, afterSplit) {
         var lastWordBeforeSplit = beforeWords[beforeWords.length - 1];
         var firstChar = lastWordBeforeSplit.charAt(0);
         
+        log("Checking openingChars for last word: '" + lastWordBeforeSplit + "', firstChar: '" + firstChar + "'", "basic");
         // Проверяем, начинается ли слово с символа из openingChars
         if (openingChars[firstChar]) {
+            log("Found openingChar, moving split position...", "basic");
             // Переносим это слово в следующий слой
             var newIndex = beforeSplit.lastIndexOf(" ");
             if (newIndex !== -1) {
+                log("Moving splitIndex from " + splitIndex + " to " + newIndex + " (openingChar)", "basic");
                 splitIndex = newIndex;
             }
         }
@@ -777,20 +906,25 @@ function applyBasicFormattingRules(text, splitIndex, beforeSplit, afterSplit) {
         var firstWordAfterSplit = afterWords[0];
         var lastChar = firstWordAfterSplit.charAt(firstWordAfterSplit.length - 1);
         
+        log("Checking specialChars for first word: '" + firstWordAfterSplit + "', lastChar: '" + lastChar + "'", "basic");
         // Проверяем, если после разрыва спецсимвол
         if (specialChars[lastChar]) {
+            log("Found specialChar, checking...", "basic");
             // Проверка на наличие openingChars в начале слова
             var firstCharAfterSplit = firstWordAfterSplit.charAt(0);
             if (!openingChars[firstCharAfterSplit]) {
                 // Если слово не начинается с openingChars, переносим разрыв
                 var newSplitIndex = text.indexOf(" ", splitIndex + 1);
                 if (newSplitIndex !== -1) {
+                    log("Moving splitIndex from " + splitIndex + " to " + newSplitIndex + " (specialChar)", "basic");
                     splitIndex = newSplitIndex;
                 }
             }
         }
     }
     
+    log("Output splitIndex: " + splitIndex, "basic");
+    log("--- End applyBasicFormattingRules ---", "basic");
     return splitIndex;
 }
 
@@ -817,16 +951,44 @@ function shouldNeverSplit(beforeSplit, afterSplit) {
     var lastWord = wordsBefore[wordsBefore.length - 1].toLowerCase();
     var firstWord = wordsAfter[0].toLowerCase();
     
+    log("shouldNeverSplit: checking '" + lastWord + "' and '" + firstWord + "'", "neverSplit");
+    
+    // ВАЖНО: Проверяем, не является ли firstWord частью составного выражения
+    // Если да, то не считаем его единицей измерения (например, "in" в "in accordance with")
+    var isPartOfCompound = false;
+    if (wordsAfter.length >= 2) {
+        var twoWordPhrase = firstWord + ' ' + wordsAfter[1].toLowerCase();
+        if (compoundExpressions[twoWordPhrase]) {
+            isPartOfCompound = true;
+            log("First word '" + firstWord + "' is part of compound expression '" + twoWordPhrase + "', skipping neverSplit check", "neverSplit");
+        }
+    }
+    if (!isPartOfCompound && wordsAfter.length >= 3) {
+        var threeWordPhrase = firstWord + ' ' + wordsAfter[1].toLowerCase() + ' ' + wordsAfter[2].toLowerCase();
+        if (compoundExpressions[threeWordPhrase]) {
+            isPartOfCompound = true;
+            log("First word '" + firstWord + "' is part of compound expression '" + threeWordPhrase + "', skipping neverSplit check", "neverSplit");
+        }
+    }
+    
     // Проверяем отдельные слова (O(1) поиск через объект)
-    if (neverSplitWords[lastWord] || neverSplitWords[firstWord]) {
+    // Но пропускаем, если слово является частью составного выражения
+    if (!isPartOfCompound && neverSplitWords[lastWord]) {
+        log("Found neverSplit word in beforeSplit: '" + lastWord + "'", "neverSplit");
+        return true;
+    }
+    if (!isPartOfCompound && neverSplitWords[firstWord]) {
+        log("Found neverSplit word in afterSplit: '" + firstWord + "'", "neverSplit");
         return true;
     }
     
     // Проверяем комбинации (например, "рис." + "1")
     if (isAbbreviationWithNumber(lastWord, firstWord)) {
+        log("Found abbreviation with number: '" + lastWord + "' + '" + firstWord + "'", "neverSplit");
         return true;
     }
     
+    log("No neverSplit words found", "neverSplit");
     return false;
 }
 
@@ -945,40 +1107,146 @@ function findAlternativePosition(text, splitIndex) {
 
 // Поиск безопасной позиции для составных выражений
 function findCompoundSafePosition(text, splitIndex) {
+    log("--- findCompoundSafePosition ---", "compound");
+    log("Text: " + text, "compound");
+    log("splitIndex: " + splitIndex, "compound");
+    
     var beforeText = text.substring(0, splitIndex);
     var wordsBefore = beforeText.split(' ');
     var afterText = text.substring(splitIndex + 1);
     var wordsAfter = afterText.split(' ');
     
-    // Для двухсловных выражений: ищем позицию между ними
-    if (wordsBefore.length >= 1 && wordsAfter.length >= 1) {
-        var phrase = wordsBefore[wordsBefore.length - 1] + ' ' + wordsAfter[0];
-        if (compoundExpressions[phrase.toLowerCase()]) {
-            // Находим позицию перед вторым словом в afterText (более точно)
-            var posInAfterText = afterText.indexOf(wordsAfter[0]);
-            if (posInAfterText !== -1) {
-                var pos = splitIndex + 1 + posInAfterText;
-                if (pos > splitIndex) return pos - 1;
+    log("wordsAfter: " + wordsAfter.join(", "), "compound");
+    
+    // УЛУЧШЕНИЕ: Проверяем составные выражения в afterText, даже если они не начинаются сразу после splitIndex
+    // Это нужно для случаев типа "we work in accordance with" - "in accordance with" находится дальше
+    if (wordsAfter.length >= 3) {
+        // Проверяем трехсловные выражения в afterText
+        for (var i = 0; i <= wordsAfter.length - 3; i++) {
+            var phrase = wordsAfter[i] + ' ' + wordsAfter[i + 1] + ' ' + wordsAfter[i + 2];
+            log("Checking phrase: '" + phrase + "'", "compound");
+            if (compoundExpressions[phrase.toLowerCase()]) {
+                log("Found compound expression: '" + phrase + "' at position " + i + " in afterText", "compound");
+                // Если составное выражение найдено не сразу после splitIndex (i > 0),
+                // нужно вернуть сам splitIndex, чтобы не разорвать выражение
+                // Это означает, что splitIndex должен остаться на месте (перед первым словом в afterText)
+                if (i > 0) {
+                    log("Compound expression found later in text (position " + i + "), keeping splitIndex: " + splitIndex, "compound");
+                    // Возвращаем splitIndex без изменений - это правильная позиция перед первым словом в afterText
+                    return splitIndex;
+                } else {
+                    // Если выражение начинается сразу, ищем пробел перед ним
+                    var phraseStartInText = splitIndex + 1;
+                    var spaceBeforePhrase = text.lastIndexOf(' ', phraseStartInText - 1);
+                    log("Compound expression starts immediately, spaceBeforePhrase: " + spaceBeforePhrase, "compound");
+                    if (spaceBeforePhrase > 0) {
+                        return spaceBeforePhrase;
+                    }
+                }
             }
         }
     }
     
-    // Для трехсловных: ищем позицию после второго слова
+    if (wordsAfter.length >= 2) {
+        // Проверяем двухсловные выражения в afterText
+        for (var i = 0; i <= wordsAfter.length - 2; i++) {
+            var phrase = wordsAfter[i] + ' ' + wordsAfter[i + 1];
+            if (compoundExpressions[phrase.toLowerCase()]) {
+                log("Found 2-word compound expression: '" + phrase + "' at position " + i + " in afterText", "compound");
+                // Если составное выражение найдено не сразу после splitIndex (i > 0),
+                // возвращаем splitIndex без изменений
+                if (i > 0) {
+                    log("2-word compound expression found later, keeping splitIndex: " + splitIndex, "compound");
+                    return splitIndex;
+                } else {
+                    var phraseStartInText = splitIndex + 1;
+                    var spaceBeforePhrase = text.lastIndexOf(' ', phraseStartInText - 1);
+                    if (spaceBeforePhrase > 0) {
+                        return spaceBeforePhrase;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Для двухсловных выражений: ищем позицию после конца выражения (если выражение пересекает границу)
+    if (wordsBefore.length >= 1 && wordsAfter.length >= 1) {
+        var phrase = wordsBefore[wordsBefore.length - 1] + ' ' + wordsAfter[0];
+        if (compoundExpressions[phrase.toLowerCase()]) {
+            log("Found 2-word compound expression crossing splitIndex: '" + phrase + "'", "compound");
+            
+            // ВАЖНО: Проверяем, является ли первое слово выражения частью avoidEndWords
+            // Если да, то нужно перенести splitIndex ПЕРЕД началом выражения, а не после конца
+            var firstWord = wordsBefore[wordsBefore.length - 1].toLowerCase();
+            if (avoidEndWords[firstWord]) {
+                // Первое слово в avoidEndWords - переносим splitIndex перед началом выражения
+                // Вычисляем beforeSplit из text и splitIndex
+                var beforeSplit = text.substring(0, splitIndex).trim();
+                var spaceBeforeFirstWord = beforeSplit.lastIndexOf(' ');
+                if (spaceBeforeFirstWord !== -1 && spaceBeforeFirstWord > 0) {
+                    log("First word '" + firstWord + "' is in avoidEndWords, returning position before expression: " + spaceBeforeFirstWord, "compound");
+                    return spaceBeforeFirstWord;
+                } else {
+                    // Если нет пробела перед первым словом (начало текста), возвращаем 0
+                    log("No space before first word, returning 0", "compound");
+                    return 0;
+                }
+            } else {
+                // Первое слово НЕ в avoidEndWords - можно оставить выражение в конце, находим позицию после конца
+                var posInAfterText = afterText.indexOf(wordsAfter[0]);
+                if (posInAfterText !== -1) {
+                    var wordEndPos = posInAfterText + wordsAfter[0].length;
+                    var spaceAfterWord = afterText.indexOf(' ', wordEndPos);
+                    if (spaceAfterWord !== -1) {
+                        var finalPos = splitIndex + 1 + spaceAfterWord;
+                        log("Returning position after 2-word compound expression: " + finalPos, "compound");
+                        return finalPos;
+                    } else {
+                        log("No space after 2-word compound expression, returning end of text", "compound");
+                        return text.length;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Для трехсловных: проверяем, можно ли разбить на двухсловную часть + оставшееся слово
     if (wordsBefore.length >= 2 && wordsAfter.length >= 1) {
         var phrase = wordsBefore[wordsBefore.length - 2] + ' ' + 
                      wordsBefore[wordsBefore.length - 1] + ' ' + 
                      wordsAfter[0];
         if (compoundExpressions[phrase.toLowerCase()]) {
-            var tempText = text.substring(0, splitIndex);
-            var lastSpace = tempText.lastIndexOf(' ');
-            if (lastSpace > 0) {
-                var secondLastSpace = tempText.substring(0, lastSpace).lastIndexOf(' ');
-                if (secondLastSpace > 0) return secondLastSpace;
+            log("Found 3-word compound expression crossing splitIndex: '" + phrase + "'", "compound");
+            // Проверяем, является ли двухсловная часть (первые два слова) тоже составным выражением
+            var twoWordPart = wordsBefore[wordsBefore.length - 2] + ' ' + wordsBefore[wordsBefore.length - 1];
+            if (compoundExpressions[twoWordPart.toLowerCase()]) {
+                // Если да, то можно разбить на двухсловную часть + оставшееся слово
+                // Например: "in accordance with" -> "in accordance" + "with the rules"
+                log("Two-word part '" + twoWordPart + "' is also a compound expression, keeping splitIndex: " + splitIndex, "compound");
+                return splitIndex; // Оставляем splitIndex на месте (между двухсловной частью и оставшимся словом)
+            } else {
+                // Если двухсловная часть не является составным выражением, ищем позицию после конца всего выражения
+                var posInAfterText = afterText.indexOf(wordsAfter[0]);
+                if (posInAfterText !== -1) {
+                    var wordEndPos = posInAfterText + wordsAfter[0].length;
+                    var spaceAfterWord = afterText.indexOf(' ', wordEndPos);
+                    if (spaceAfterWord !== -1) {
+                        var finalPos = splitIndex + 1 + spaceAfterWord;
+                        log("Returning position after compound expression: " + finalPos, "compound");
+                        return finalPos;
+                    } else {
+                        log("No space after compound expression, returning end of text", "compound");
+                        return text.length;
+                    }
+                }
             }
         }
     }
     
-    return findAlternativePosition(text, splitIndex);
+    log("No compound expression found in afterText, using findAlternativePosition", "compound");
+    var result = findAlternativePosition(text, splitIndex);
+    log("findAlternativePosition returned: " + result, "compound");
+    return result;
 }
 
 // ============================================================================
