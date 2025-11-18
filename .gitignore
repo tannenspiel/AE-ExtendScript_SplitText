@@ -21,4 +21,5 @@ Thumbs.db
 # Игнорировать дополнительные документы анализа (оставляем только README.md и SCRIPT_MAP.md)
 Documentation/ANALYSIS_*.md
 Documentation/CODE_AUDIT.md
+Documentation/TEST_SENTENCES.md
 
