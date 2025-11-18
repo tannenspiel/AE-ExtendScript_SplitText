@@ -33,6 +33,10 @@
 
 ## 🚀 Usage
 
+### Tutorial Video
+
+📹 **Watch the tutorial**: [SplitText v1.2 Tutorial](https://youtu.be/gjr6Doi_EwE)
+
 ### Installation
 1. Copy the `SplitText v1.2.jsx` file to the After Effects scripts folder:
    - **Windows**: `C:\Program Files\Adobe\Adobe After Effects [version]\Support Files\Scripts\`

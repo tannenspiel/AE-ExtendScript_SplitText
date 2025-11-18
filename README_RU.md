@@ -35,6 +35,10 @@
 
 ## 🚀 Использование
 
+### Видео-туториал
+
+📹 **Смотрите туториал**: [SplitText v1.2 Tutorial](https://youtu.be/gjr6Doi_EwE)
+
 ### Установка
 1. Скопируйте файл `SplitText.jsx` в папку скриптов After Effects:
    - **Windows**: `C:\Program Files\Adobe\Adobe After Effects [версия]\Support Files\Scripts\`
