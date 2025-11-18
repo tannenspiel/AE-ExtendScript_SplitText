@@ -153,8 +153,7 @@ A detailed map of all functions and data structures is available in [SCRIPT_MAP.
 7. **Event handlers** (lines 1182-1195)
 
 ### Additional Documentation:
-- **[SCRIPT_MAP.md](SCRIPT_MAP.md)** - Map of all functions with line numbers
-- **[CODE_AUDIT.md](Documentation/CODE_AUDIT.md)** - Detailed code audit, issues and recommendations
+- **[SCRIPT_MAP.md](Documentation/SCRIPT_MAP.md)** - Map of all functions with line numbers
 
 ## 🔄 Version History
 
